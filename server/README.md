@@ -1,6 +1,6 @@
 # Kanbot API
 
-Express 5 + TypeScript. JSON-file database. JWT auth. AI assistant through any OpenAI-compatible API, with a free built-in mock.
+Express 5 + TypeScript. JSON-file database. JWT auth. AI assistant through Groq, with a free built-in mock.
 
 ```bash
 npm install
@@ -17,10 +17,10 @@ npm run typecheck
 
 ## AI configuration
 
-| `.env` | Behaviour |
-|---|---|
-| `AI_API_KEY` empty (default) | **Mock mode**: rule-based answers, instant, free, offline. `GET /api/ai/status` → `{ "mode": "mock" }` |
-| `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` set | **Real LLM** via `POST {AI_BASE_URL}/chat/completions` (OpenRouter, Groq, Gemini, Ollama… see `.env.example`) |
+| `.env`                            | Behaviour                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GROQ_API_KEY` empty (default)    | **Mock mode**: rule-based answers, instant, free, offline. `GET /api/ai/status` → `{ "mode": "mock" }` |
+| `GROQ_API_KEY` and `AI_MODEL` set | **Groq mode** via `https://api.groq.com/openai/v1/chat/completions`                                    |
 
 The server validates everything the model returns: enums are coerced, story points are snapped to 1/2/3/5/8/13, sprint plans only contain real backlog ids within capacity. If the model returns unusable JSON for todos or a plan, the mock result is used instead. AI routes are limited to 20 requests per minute per user.
 
@@ -34,7 +34,7 @@ src/
 ├── db/store.ts              # JSON-file store + record types
 ├── services/board.service.ts# ownership checks, ordering, sprint stats, serializers
 ├── routes/                  # auth, projects, todos, sprints, ai (+ zod schemas)
-├── ai/                      # client.ts (OpenAI-compatible fetch), assistant.service.ts (real + mock)
+├── ai/                      # client.ts (Groq API fetch), assistant.service.ts (Groq + mock)
 ├── middleware/              # auth, validation, errors, request logger
 ├── lib/                     # jwt, password hashing, errors
 └── scripts/                 # seed.ts, smoke.ts
