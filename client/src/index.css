@@ -1013,6 +1013,13 @@ ul {
   border-radius: var(--r-md);
   box-shadow: rgba(15, 15, 15, 0.16) 0 16px 48px -8px;
 }
+.row-menu-popup {
+  position: fixed;
+  right: auto;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
 .menu button {
   width: 100%;
   text-align: left;
