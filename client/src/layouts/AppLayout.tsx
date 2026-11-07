@@ -1,4 +1,6 @@
 import {
+  Check,
+  ChevronDown,
   History,
   LayoutDashboard,
   ListTodo,
@@ -7,7 +9,7 @@ import {
   Folder,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useNavigate } from "react-router";
 import { AiProvider } from "../features/ai/AiProvider";
 import { useAi } from "../features/ai/useAi";
@@ -37,14 +39,48 @@ export function AppLayout() {
   const projects = useProjects();
   const project = useProject(projectId);
   const [open, setOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  const projectSwitcherRef = useRef<HTMLDivElement>(null);
+  const projectSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
 
   const closeMenu = () => setOpen(false);
+  const closeProjectMenu = () => setProjectMenuOpen(false);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !projectSwitcherRef.current?.contains(event.target)
+      ) {
+        closeProjectMenu();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeProjectMenu();
+        projectSwitcherTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [projectMenuOpen]);
+
+  const selectedProject = projects.data?.find((p) => p.id === projectId);
+  const selectedProjectName =
+    selectedProject?.name ??
+    project.data?.name ??
+    (projectId ? "Current project" : "Select a project…");
+
   const handleLogout = () => {
     navigate("/login", { replace: true });
     logout();
@@ -67,29 +103,106 @@ export function AppLayout() {
             <label htmlFor="project-switcher" className="sidebar-label">
               Project
             </label>
-            <select
-              id="project-switcher"
-              className="input"
-              value={projectId ?? ""}
-              onChange={(e) => {
-                if (e.target.value) {
-                  navigate(`/projects/${e.target.value}/backlog`);
-                  closeMenu();
-                }
-              }}
-            >
-              {!projectId && <option value="">Select a project…</option>}
-              {projects.data?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.key} · {p.name}
-                </option>
-              ))}
-              {projectId && !projects.data?.some((p) => p.id === projectId) && (
-                <option value={projectId}>
-                  {project.data?.name ?? "Current project"}
-                </option>
-              )}
-            </select>
+            <div className="project-switcher" ref={projectSwitcherRef}>
+              <button
+                id="project-switcher"
+                ref={projectSwitcherTriggerRef}
+                type="button"
+                className="project-switcher-trigger"
+                aria-expanded={projectMenuOpen}
+                aria-controls="project-switcher-menu"
+                onClick={() => setProjectMenuOpen((isOpen) => !isOpen)}
+              >
+                <span className="project-switcher-current">
+                  {selectedProject?.key && (
+                    <span className="project-switcher-key">
+                      {selectedProject.key}
+                    </span>
+                  )}
+                  <span className="project-switcher-name">
+                    {selectedProjectName}
+                  </span>
+                </span>
+                <ChevronDown
+                  className="project-switcher-chevron"
+                  size={16}
+                  aria-hidden="true"
+                />
+              </button>
+              <div
+                id="project-switcher-menu"
+                className="project-switcher-menu"
+                hidden={!projectMenuOpen}
+              >
+                {projects.isPending ? (
+                  <p className="project-switcher-message" role="status">
+                    Loading projects…
+                  </p>
+                ) : projects.isError ? (
+                  <p className="project-switcher-message" role="alert">
+                    Could not load projects.
+                  </p>
+                ) : projects.data?.length || projectId ? (
+                  <ul>
+                    {projects.data?.map((p) => (
+                      <li key={p.id}>
+                        {p.id === projectId ? (
+                          <div
+                            className="project-switcher-item is-current"
+                            aria-current="page"
+                          >
+                            <span className="project-switcher-key">{p.key}</span>
+                            <span className="project-switcher-name">
+                              {p.name}
+                            </span>
+                            <Check
+                              className="project-switcher-check"
+                              size={15}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        ) : (
+                          <Link
+                            className="project-switcher-item"
+                            to={`/projects/${p.id}/backlog`}
+                            onClick={closeProjectMenu}
+                          >
+                            <span className="project-switcher-key">{p.key}</span>
+                            <span className="project-switcher-name">
+                              {p.name}
+                            </span>
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                    {projectId && !selectedProject && (
+                      <li>
+                        <div
+                          className="project-switcher-item is-current"
+                          aria-current="page"
+                        >
+                          {project.data?.key && (
+                            <span className="project-switcher-key">
+                              {project.data.key}
+                            </span>
+                          )}
+                          <span className="project-switcher-name">
+                            {project.data?.name ?? "Current project"}
+                          </span>
+                          <Check
+                            className="project-switcher-check"
+                            size={15}
+                            aria-hidden="true"
+                          />
+                        </div>
+                      </li>
+                    )}
+                  </ul>
+                ) : (
+                  <p className="project-switcher-message">No projects yet.</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <nav className="sidebar-nav" aria-label="Main">

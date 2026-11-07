@@ -22,7 +22,9 @@ npm run typecheck
 | `GROQ_API_KEY` empty (default)    | **Mock mode**: rule-based answers, instant, free, offline. `GET /api/ai/status` → `{ "mode": "mock" }` |
 | `GROQ_API_KEY` and `AI_MODEL` set | **Groq mode** via `https://api.groq.com/openai/v1/chat/completions`                                    |
 
-The server validates everything the model returns: enums are coerced, story points are snapped to 1/2/3/5/8/13, sprint plans only contain real backlog ids within capacity. If the model returns unusable JSON for todos or a plan, the mock result is used instead. AI routes are limited to 20 requests per minute per user.
+If Groq rejects the key, is rate-limited, times out, or otherwise fails, the request automatically uses the built-in mock instead of returning an AI error. The server then stays in mock mode until restarted, avoiding repeated requests with a bad key; check `GET /api/ai/status` to see the active mode. Restart after correcting the key to try Groq again. No hosted AI provider can guarantee uninterrupted access, so keep the key private and expect provider-side limits or outages.
+
+The server validates everything the model returns: enums are coerced, story points are snapped to 1/2/3/5/8/13, and sprint plans only contain real backlog ids within capacity. Invalid model output also falls back to the mock. AI routes are limited to 20 requests per minute per user.
 
 ## Structure
 

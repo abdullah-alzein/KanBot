@@ -8,10 +8,12 @@ import {
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { CheckCheck, Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useParams } from 'react-router'
 import { Button } from '../../components/Button'
 import { Dialog } from '../../components/Dialog'
@@ -26,6 +28,34 @@ import { SprintSummaryPanel } from '../sprints/SprintSummaryPanel'
 import { CardBody } from './BoardCard'
 import { BoardColumn } from './BoardColumn'
 import { CompleteSprintDialog } from './CompleteSprintDialog'
+
+const snapOverlayToCursor: Modifier = ({
+  transform,
+  activatorEvent,
+  activeNodeRect,
+  overlayNodeRect,
+}) => {
+  if (
+    !(activatorEvent instanceof MouseEvent) ||
+    !activeNodeRect ||
+    !overlayNodeRect
+  ) {
+    return transform
+  }
+  return {
+    ...transform,
+    x:
+      transform.x +
+      activatorEvent.clientX -
+      activeNodeRect.left -
+      overlayNodeRect.width / 2,
+    y:
+      transform.y +
+      activatorEvent.clientY -
+      activeNodeRect.top -
+      overlayNodeRect.height / 2,
+  }
+}
 
 function Progress({ label, done, total }: { label: string; done: number; total: number }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0
@@ -51,7 +81,7 @@ export function BoardPage() {
   const board = useBoard(activeId)
   const move = useMoveTodo(projectId)
   const openTodo = useOpenTodo()
-  const [dragging, setDragging] = useState<Todo | null>(null)
+  const [dragging, setDragging] = useState<{ todo: Todo; width: number } | null>(null)
   const [completing, setCompleting] = useState(false)
   const [summarizing, setSummarizing] = useState(false)
 
@@ -83,7 +113,9 @@ export function BoardPage() {
 
   const onDragStart = ({ active }: DragStartEvent) => {
     const from = findColumn(String(active.id))
-    setDragging(from ? (columns[from].find((t) => t.id === active.id) ?? null) : null)
+    const todo = from ? columns[from].find((t) => t.id === active.id) : null
+    const width = active.rect.current.initial?.width
+    setDragging(todo && width ? { todo, width } : null)
   }
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -141,13 +173,23 @@ export function BoardPage() {
             ))}
           </div>
         </div>
-        <DragOverlay>
-          {dragging ? (
-            <div className="board-card board-card-overlay">
-              <CardBody todo={dragging} onOpen={() => undefined} onStatus={() => undefined} />
-            </div>
-          ) : null}
-        </DragOverlay>
+        {createPortal(
+          <DragOverlay modifiers={[snapOverlayToCursor]}>
+            {dragging ? (
+              <div
+                className="board-card board-card-overlay"
+                style={{ width: dragging.width }}
+              >
+                <CardBody
+                  todo={dragging.todo}
+                  onOpen={() => undefined}
+                  onStatus={() => undefined}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>,
+          document.body,
+        )}
       </DndContext>
 
       {completing && <CompleteSprintDialog sprint={sprint} projectId={projectId} onClose={() => setCompleting(false)} />}

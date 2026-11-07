@@ -14,7 +14,7 @@ interface Props {
 export function BoardColumn({ status, todos, onOpen, onStatus }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${status}` })
   return (
-    <section className={`board-col ${isOver ? 'is-over' : ''}`} aria-label={STATUS_LABELS[status]}>
+    <section ref={setNodeRef} className={`board-col ${isOver ? 'is-over' : ''}`} aria-label={STATUS_LABELS[status]}>
       <header className="board-col-head">
         <h2>{STATUS_LABELS[status]}</h2>
         <span className="count" aria-label={`${todos.length} todos`}>
@@ -22,7 +22,7 @@ export function BoardColumn({ status, todos, onOpen, onStatus }: Props) {
         </span>
       </header>
       <SortableContext items={todos.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <ul ref={setNodeRef} className="board-col-list">
+        <ul className="board-col-list">
           {todos.map((t) => (
             <BoardCard key={t.id} todo={t} onOpen={onOpen} onStatus={onStatus} />
           ))}

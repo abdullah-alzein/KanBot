@@ -30,7 +30,29 @@ import {
 } from "../types/api.js";
 import { complete, extractJson } from "./client.js";
 
-export const aiSource = (): AiSource => (env.aiEnabled ? "ai" : "mock");
+let providerUnavailable = false;
+
+const providerEnabled = () => env.aiEnabled && !providerUnavailable;
+
+export const aiSource = (): AiSource => (providerEnabled() ? "ai" : "mock");
+
+async function withMockFallback<T>(
+  feature: string,
+  request: () => Promise<T>,
+  fallback: () => T,
+): Promise<T> {
+  if (!providerEnabled()) return fallback();
+  try {
+    return await request();
+  } catch (error) {
+    providerUnavailable = true;
+    console.warn(
+      `AI provider failed during ${feature}; using the built-in mock until the server restarts.`,
+      error instanceof Error ? error.message : error,
+    );
+    return fallback();
+  }
+}
 
 const PRIORITY_RANK: Record<TodoPriority, number> = {
   urgent: 0,
@@ -104,25 +126,29 @@ export async function generateTodos(
   prompt: string,
   count: number,
 ): Promise<DraftTodo[]> {
-  if (!env.aiEnabled) return mockGenerateTodos(prompt, count);
-
-  const reply = await complete([
-    {
-      role: "system",
-      content:
-        "You are an agile assistant that breaks a feature request into small, actionable todos for a software project. " +
-        `Reply with JSON only, no prose, in this exact shape: {"todos":[{"title":string,"description":string,"type":"task"|"story"|"bug","priority":"low"|"medium"|"high"|"urgent","storyPoints":${STORY_POINTS.join("|")}}]}. ` +
-        "Titles are short and start with a verb. Descriptions are 1–3 sentences with acceptance criteria. " +
-        `Return exactly ${count} todos. Do not repeat todos that already exist in the backlog.`,
+  return withMockFallback(
+    "todo generation",
+    async () => {
+      const reply = await complete([
+        {
+          role: "system",
+          content:
+            "You are an agile assistant that breaks a feature request into small, actionable todos for a software project. " +
+            `Reply with JSON only, no prose, in this exact shape: {"todos":[{"title":string,"description":string,"type":"task"|"story"|"bug","priority":"low"|"medium"|"high"|"urgent","storyPoints":${STORY_POINTS.join("|")}}]}. ` +
+            "Titles are short and start with a verb. Descriptions are 1–3 sentences with acceptance criteria. " +
+            `Return exactly ${count} todos. Do not repeat todos that already exist in the backlog.`,
+        },
+        {
+          role: "user",
+          content: `${projectContext(project)}\n\nFeature request:\n${prompt}`,
+        },
+      ]);
+      const parsed = draftSchema.safeParse(extractJson(reply));
+      if (!parsed.success) throw new Error("AI response did not match the todo format.");
+      return parsed.data.todos.slice(0, count);
     },
-    {
-      role: "user",
-      content: `${projectContext(project)}\n\nFeature request:\n${prompt}`,
-    },
-  ]);
-  const parsed = draftSchema.safeParse(extractJson(reply));
-  if (!parsed.success) return mockGenerateTodos(prompt, count); // be forgiving: never leave the user empty-handed
-  return parsed.data.todos.slice(0, count);
+    () => mockGenerateTodos(prompt, count),
+  );
 }
 
 function mockGenerateTodos(prompt: string, count: number): DraftTodo[] {
@@ -252,44 +278,48 @@ export async function planSprint(
       reasoning: "The backlog is empty. Add some todos first.",
     };
   }
-  if (!env.aiEnabled) return mockPlanSprint(backlog, capacity, focus);
+  return withMockFallback(
+    "sprint planning",
+    async () => {
+      const reply = await complete([
+        {
+          role: "system",
+          content:
+            "You are an agile coach helping one developer plan their next sprint. Pick backlog todos for the sprint so that the sum of " +
+            `storyPoints does not exceed the capacity of ${capacity} points. Prefer higher priority, bugs, and todos that fit the focus. ` +
+            'Use the exact todo ids from the backlog list (the value after "id:"). ' +
+            'Reply with JSON only: {"goal": string (one sentence sprint goal), "todoIds": string[] (in suggested order), "reasoning": string (2–4 sentences)}.',
+        },
+        {
+          role: "user",
+          content: `${projectContext(project)}\n\nCapacity: ${capacity} points.${focus ? `\nFocus: ${focus}` : ""}`,
+        },
+      ]);
+      const parsed = planSchema.safeParse(extractJson(reply));
+      if (!parsed.success) throw new Error("AI response did not match the sprint plan format.");
 
-  const reply = await complete([
-    {
-      role: "system",
-      content:
-        "You are an agile coach helping one developer plan their next sprint. Pick backlog todos for the sprint so that the sum of " +
-        `storyPoints does not exceed the capacity of ${capacity} points. Prefer higher priority, bugs, and todos that fit the focus. ` +
-        'Use the exact todo ids from the backlog list (the value after "id:"). ' +
-        'Reply with JSON only: {"goal": string (one sentence sprint goal), "todoIds": string[] (in suggested order), "reasoning": string (2–4 sentences)}.',
+      // Never trust ids or math from the model: keep valid backlog ids, enforce capacity.
+      const byId = new Map(backlog.map((t) => [t.id, t]));
+      const picked: TodoRecord[] = [];
+      let total = 0;
+      for (const id of new Set(parsed.data.todoIds)) {
+        const todo = byId.get(id);
+        if (!todo || total + (todo.storyPoints ?? 0) > capacity) continue;
+        picked.push(todo);
+        total += todo.storyPoints ?? 0;
+      }
+      return {
+        goal:
+          parsed.data.goal ||
+          focus ||
+          `Deliver ${picked[0]?.title ?? "the top backlog items"}`,
+        todoIds: picked.map((t) => t.id),
+        totalPoints: total,
+        reasoning: parsed.data.reasoning,
+      };
     },
-    {
-      role: "user",
-      content: `${projectContext(project)}\n\nCapacity: ${capacity} points.${focus ? `\nFocus: ${focus}` : ""}`,
-    },
-  ]);
-  const parsed = planSchema.safeParse(extractJson(reply));
-  if (!parsed.success) return mockPlanSprint(backlog, capacity, focus);
-
-  // Never trust ids or math from the model: keep valid backlog ids, enforce capacity.
-  const byId = new Map(backlog.map((t) => [t.id, t]));
-  const picked: TodoRecord[] = [];
-  let total = 0;
-  for (const id of new Set(parsed.data.todoIds)) {
-    const todo = byId.get(id);
-    if (!todo || total + (todo.storyPoints ?? 0) > capacity) continue;
-    picked.push(todo);
-    total += todo.storyPoints ?? 0;
-  }
-  return {
-    goal:
-      parsed.data.goal ||
-      focus ||
-      `Deliver ${picked[0]?.title ?? "the top backlog items"}`,
-    todoIds: picked.map((t) => t.id),
-    totalPoints: total,
-    reasoning: parsed.data.reasoning,
-  };
+    () => mockPlanSprint(backlog, capacity, focus),
+  );
 }
 
 function mockPlanSprint(
@@ -362,7 +392,7 @@ export async function summarizeSprint(
     ? Math.round((stats.donePoints / stats.totalPoints) * 100)
     : 0;
 
-  if (!env.aiEnabled) {
+  const mockSummary = () => {
     const list = (items: TodoRecord[], empty: string) =>
       items.length
         ? items.map((t) => `- **${t.key}** ${t.title}`).join("\n")
@@ -397,31 +427,36 @@ export async function summarizeSprint(
     ]
       .filter(Boolean)
       .join("\n\n");
-  }
+  };
 
-  return complete(
-    [
-      {
-        role: "system",
-        content:
-          "You are an agile coach writing a short sprint summary for a developer. Use Markdown with exactly these sections: " +
-          '"### Highlights", "### Not finished", "### Suggestions". Start with one sentence on whether the goal was met. ' +
-          "Be concrete and encouraging, under 200 words. Mention todo keys like KAN-12.",
-      },
-      {
-        role: "user",
-        content: [
-          `Project: ${project.name}`,
-          `Sprint: ${sprint.name} (${sprint.status}), goal "${sprint.goal || "none"}", ${sprint.startDate} → ${sprint.endDate}`,
-          `Stats: ${stats.doneTodos}/${stats.totalTodos} todos, ${stats.donePoints}/${stats.totalPoints} points (${pct}%), carried over: ${stats.carriedOver}`,
-          "Done:",
-          ...done.map(line),
-          "Not done:",
-          ...(open.length ? open.map(line) : ["(none)"]),
-        ].join("\n"),
-      },
-    ],
-    { maxTokens: 800 },
+  return withMockFallback(
+    "sprint summary",
+    () =>
+      complete(
+        [
+          {
+            role: "system",
+            content:
+              "You are an agile coach writing a short sprint summary for a developer. Use Markdown with exactly these sections: " +
+              '"### Highlights", "### Not finished", "### Suggestions". Start with one sentence on whether the goal was met. ' +
+              "Be concrete and encouraging, under 200 words. Mention todo keys like KAN-12.",
+          },
+          {
+            role: "user",
+            content: [
+              `Project: ${project.name}`,
+              `Sprint: ${sprint.name} (${sprint.status}), goal "${sprint.goal || "none"}", ${sprint.startDate} → ${sprint.endDate}`,
+              `Stats: ${stats.doneTodos}/${stats.totalTodos} todos, ${stats.donePoints}/${stats.totalPoints} points (${pct}%), carried over: ${stats.carriedOver}`,
+              "Done:",
+              ...done.map(line),
+              "Not done:",
+              ...(open.length ? open.map(line) : ["(none)"]),
+            ].join("\n"),
+          },
+        ],
+        { maxTokens: 800 },
+      ),
+    mockSummary,
   );
 }
 
@@ -431,21 +466,25 @@ export async function chat(
   project: ProjectRecord,
   messages: ChatMessage[],
 ): Promise<string> {
-  if (!env.aiEnabled) return mockChat(project, messages.at(-1)!.content);
-  return complete(
-    [
-      {
-        role: "system",
-        content:
-          "You are Kanbot, a friendly assistant inside a personal kanban/agile app. Help the user with their todos, backlog and sprints: " +
-          "answer questions about them, suggest todos, help prioritize and plan. Be concise and use Markdown. " +
-          "You cannot change data yourself: when the user wants todos created, a sprint planned or summarized, tell them to use the " +
-          '"Create todos", "Plan sprint" or "Summarize sprint" buttons. Politely refuse unrelated topics.\n\n' +
-          projectContext(project),
-      },
-      ...messages,
-    ],
-    { maxTokens: 700, temperature: 0.6 },
+  return withMockFallback(
+    "chat",
+    () =>
+      complete(
+        [
+          {
+            role: "system",
+            content:
+              "You are Kanbot, a friendly assistant inside a personal kanban/agile app. Help the user with their todos, backlog and sprints: " +
+              "answer questions about them, suggest todos, help prioritize and plan. Be concise and use Markdown. " +
+              "You cannot change data yourself: when the user wants todos created, a sprint planned or summarized, tell them to use the " +
+              '"Create todos", "Plan sprint" or "Summarize sprint" buttons. Politely refuse unrelated topics.\n\n' +
+              projectContext(project),
+          },
+          ...messages,
+        ],
+        { maxTokens: 700, temperature: 0.6 },
+      ),
+    () => mockChat(project, messages.at(-1)!.content),
   );
 }
 
@@ -495,7 +534,7 @@ function mockChat(project: ProjectRecord, question: string): string {
     ].join("\n");
   }
   return [
-    "Hi! I'm Kanbot, your sprint assistant. _(Running in mock mode — no AI key configured.)_",
+    "Hi! I'm Kanbot, your sprint assistant. _(Running in offline mode — the AI provider is unavailable.)_",
     "",
     "Try asking me:",
     '- "How is the sprint going?"',

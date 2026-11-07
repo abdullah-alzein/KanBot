@@ -52,7 +52,7 @@ src/
 - **Projects:** list, create, edit (key hint), delete with confirmation, switcher, project id in the URL.
 - **Backlog/todos:** ordered list with totals, quick create (Enter/Escape), details drawer (all fields, discard warning, server field errors, delete), debounced search (350 ms) with priority/type filters.
 - **Sprints:** planned sprint sections, create/edit/delete, start dialog (defaults today and +14 days, disabled while another sprint is active, 409 handled), completion with carry-over target, history and detail pages using the saved `completedStats`.
-- **Drag and drop:** backlog reorder and board moves with optimistic updates and rollback. Non-drag alternatives: row menu (top, bottom, move to sprint or backlog) and a status select on board cards.
+- **Drag and drop:** backlog reorder and board moves with optimistic updates and rollback. Board cards can be dropped anywhere in a status column, including empty columns. Non-drag alternatives: row menu (top, bottom, move to sprint or backlog) and a status select on board cards.
 - **AI:** Ask AI drawer with chat (Enter/Shift+Enter, Markdown, thinking state, kept while closed, reset on project switch or New chat), Generate todos (editable drafts, nothing saved until confirmed), Plan sprint (editable goal and selection, running total vs capacity, created only on confirmation), sprint summary (saved, regenerate, timestamp), Mock AI badge, "AI can make mistakes" notice, loading/error/retry states.
 
 ## Known limitations

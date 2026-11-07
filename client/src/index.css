@@ -454,7 +454,7 @@ ul {
 .auth-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 100vh;
+  min-height: 50vh;
 }
 .auth-hero {
   position: relative;
@@ -1309,6 +1309,7 @@ ul {
   list-style: none;
 }
 .board-card-overlay {
+  pointer-events: none;
   box-shadow: rgba(15, 15, 15, 0.2) 0 24px 48px -8px;
 }
 .card-top {
@@ -1650,9 +1651,9 @@ a,
   content: "";
 }
 .auth-hero h2 {
-  max-width: 12ch;
-  font-size: 48px;
-  line-height: 1.04;
+  max-width: 22ch;
+  font-size: clamp(32px, 3.2vw, 44px);
+  line-height: 1.12;
   letter-spacing: 0;
   font-weight: 650;
 }
@@ -1660,6 +1661,16 @@ a,
   color: #b7bec0;
   max-width: 38ch;
   font-size: 16px;
+}
+.auth-hero .auth-tagline {
+  max-width: none;
+  align-self: center;
+  margin-top: 4px;
+  color: #a78bfa;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
 }
 .auth-logo {
   width: min(230px, 72%);
@@ -1692,10 +1703,13 @@ a,
   margin-top: 6px;
 }
 .auth-switch a {
-  color: var(--link);
+  color: var(--primary);
   font-weight: 600;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+.auth-switch a:hover {
+  color: var(--primary-pressed);
 }
 
 /* Application frame */
@@ -1721,19 +1735,114 @@ a,
   letter-spacing: 0;
   text-transform: uppercase;
 }
-.sidebar .input {
-  min-height: 40px;
+.project-switcher {
+  position: relative;
+}
+.project-switcher-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
   padding: 8px 10px;
+  border: 1px solid #3a4042;
+  border-radius: var(--r-md);
   color: #eff1f1;
   background: #222627;
-  border-color: #3a4042;
+  font: 500 14px/1.3 var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
-.sidebar .input:focus {
-  border-color: #7d8587;
+.project-switcher-trigger:hover,
+.project-switcher-trigger[aria-expanded="true"] {
+  background: #293236;
+  border-color: #515c60;
 }
-.sidebar .input option {
-  color: var(--ink);
-  background: #fff;
+.project-switcher-trigger:focus-visible {
+  outline-color: #a78bfa;
+}
+.project-switcher-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.project-switcher-key {
+  flex: none;
+  padding: 2px 6px;
+  border: 1px solid rgb(167 139 250 / 28%);
+  border-radius: 4px;
+  color: #c4b5fd;
+  background: rgb(124 92 214 / 16%);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+.project-switcher-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-chevron {
+  flex: none;
+  color: #aab1b3;
+  transition: transform 140ms ease;
+}
+.project-switcher-trigger[aria-expanded="true"] .project-switcher-chevron {
+  transform: rotate(180deg);
+}
+.project-switcher-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  max-height: min(320px, calc(100vh - 180px));
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid #354147;
+  border-radius: var(--r-lg);
+  background: #171f23;
+  box-shadow: rgba(0, 0, 0, 0.34) 0 14px 32px -8px;
+}
+.project-switcher-menu[hidden] {
+  display: none;
+}
+.project-switcher-menu ul {
+  display: grid;
+  gap: 3px;
+}
+.project-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 7px 8px;
+  border-radius: var(--r-md);
+  color: #e7ebec;
+  font-size: 13px;
+  text-decoration: none;
+}
+a.project-switcher-item:hover,
+a.project-switcher-item:focus-visible {
+  color: #fff;
+  background: #252f34;
+}
+.project-switcher-item.is-current {
+  color: #e9e2ff;
+  background: #292438;
+}
+.project-switcher-check {
+  flex: none;
+  margin-left: auto;
+  color: #b7a2ff;
+}
+.project-switcher-message {
+  padding: 10px 8px;
+  color: #aab1b3;
+  font-size: 13px;
 }
 .sidebar-nav {
   gap: 4px;
@@ -2285,15 +2394,6 @@ body,
 :root[data-theme="dark"] .sidebar {
   background: var(--navy);
   border-color: #242d32;
-}
-:root[data-theme="dark"] .sidebar .input {
-  color: var(--ink);
-  background: #171f23;
-  border-color: #354147;
-}
-:root[data-theme="dark"] .sidebar .input option {
-  color: var(--ink);
-  background: var(--surface-raised);
 }
 :root[data-theme="dark"] .sidebar-nav a.active {
   background: #1d252a;

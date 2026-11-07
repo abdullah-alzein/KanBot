@@ -19,10 +19,12 @@ export function AuthLayout() {
         <span className="dot dot-sky" aria-hidden="true" />
         <span className="dot dot-peach" aria-hidden="true" />
         <img src="/kanbot-logo-dark.png" alt="Kanbot" className="auth-logo" />
-        <h2>Plan the sprint. Let the bot do the typing.</h2>
-        <p>
-          Backlog, board and sprint history for one person, with an AI teammate
-          that drafts todos and summarises the week.
+        <h2>
+          Your personal workspace to organize, manage, track
+          sprint progress, all with AI assistant.
+        </h2>
+        <p className="auth-tagline">
+          PLAN. TRACK. ACHIEVE.
         </p>
       </aside>
       <main className="auth-main">
